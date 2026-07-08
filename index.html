@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
@@ -48,6 +48,8 @@ body{background:#f5f5f5}
 .result-precio{font-size:26px;font-weight:700;color:#111;white-space:nowrap;min-width:100px;text-align:center}
 .qty-control{display:flex;align-items:center;gap:4px}
 .qty-btn{width:28px;height:28px;border:1.5px solid #ccc;border-radius:6px;background:#fff;color:#333;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;font-weight:500}
+.btn-clear-search{width:44px;flex-shrink:0;border:1.5px solid #ccc;border-radius:8px;background:#fff;color:#888;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center}
+.btn-clear-search:hover{background:#f5f5f5;color:#e24b4a;border-color:#e24b4a}
 .qty-btn:hover{border-color:var(--brand);color:var(--brand)}
 .qty-input{width:44px;height:28px;text-align:center;border:1.5px solid #ccc;border-radius:6px;font-size:14px;font-weight:500;color:#111;background:#fff}
 .qty-input:focus{outline:none;border-color:var(--brand)}
@@ -291,6 +293,7 @@ body{background:#f5f5f5}
     <div class="card-title"><i class="ti ti-search"></i> Buscar producto</div>
     <div class="search-row">
       <input type="text" id="search-input" placeholder="Código o nombre (ej: 10001 o cemento)" oninput="buscarDebounced()" autocomplete="off"/>
+      <button type="button" class="btn-clear-search" onclick="limpiarBusqueda('buscar')" title="Borrar búsqueda"><i class="ti ti-x"></i></button>
     </div>
     <div id="results-area" class="results-list"></div>
   </div>
@@ -300,6 +303,11 @@ body{background:#f5f5f5}
 <div id="panel-carrito" class="panel">
   <div class="card">
     <div class="card-title"><i class="ti ti-shopping-cart"></i> Carrito de pedido</div>
+    <div class="search-row" style="margin-bottom:8px">
+      <input type="text" id="search-input-carrito" placeholder="Buscar producto del catálogo (código o nombre)" oninput="buscarDebounced('carrito')" autocomplete="off"/>
+      <button type="button" class="btn-clear-search" onclick="limpiarBusqueda('carrito')" title="Borrar búsqueda"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="results-area-carrito" class="results-list"></div>
     <div style="margin-bottom:12px">
       <a href="#" onclick="toggleManualForm();return false;" style="font-size:12px;color:#666;text-decoration:none">
       + Agregá productos no enlistados
@@ -551,6 +559,11 @@ body{background:#f5f5f5}
       <span><i class="ti ti-list"></i> Detalle del pedido</span>
       <a href="#" onclick="showTab('carrito');return false;" style="font-size:12px;color:#666;text-decoration:none"><i class="ti ti-edit"></i> Editar productos en el carrito</a>
     </div>
+    <div class="search-row" style="margin-bottom:8px">
+      <input type="text" id="search-input-pedido" placeholder="Buscar producto del catálogo (código o nombre)" oninput="buscarDebounced('pedido')" autocomplete="off"/>
+      <button type="button" class="btn-clear-search" onclick="limpiarBusqueda('pedido')" title="Borrar búsqueda"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="results-area-pedido" class="results-list"></div>
     <div id="ped-resumen-body"></div>
   </div>
 
@@ -633,6 +646,20 @@ var UNIDAD_LABEL = {
   "m3_med":"½ m³","m3_cuar":"¼ m³",
   "cm":"cm","kg":"kg","mg":"mg","bolsa":"bolsa","lts":"litros"
 };
+// Abreviatura corta para mostrar junto a la cantidad en los tickets (PNG)
+var UNIDAD_ABREV_TICKET = {
+  "u":"u","m2":"m²","m":"m","m3":"m³",
+  "cm":"cm","kg":"kg","mg":"mg","bolsa":"bolsa","lts":"lts"
+};
+// Unidades que ya representan una fracción en sí mismas (½ m³, ¼ m³, etc.):
+// en el ticket se oculta la cantidad numérica y se muestra solo la medida.
+var UNIDADES_FRACCION = ["m3_med","m3_cuar"];
+function fmtCantTicket(qty, u) {
+  if (UNIDADES_FRACCION.indexOf(u) !== -1) {
+    return UNIDAD_LABEL[u] || u;
+  }
+  return qty + ' ' + (UNIDAD_ABREV_TICKET[u] || u || 'u');
+}
 
 var P = [];
 var carrito = [];
@@ -898,32 +925,55 @@ function cerrarAuth() {
 }
 
 // ---------- Buscar ----------
-var _buscarTimer = null;
-function buscarDebounced() {
-  clearTimeout(_buscarTimer);
-  _buscarTimer = setTimeout(buscar, 200);
+// Mismo motor de búsqueda reutilizado en 3 lugares: pestaña "Consultar precio",
+// pestaña "Carrito" y pestaña "Pedidos" (detalle del pedido).
+var AREA_IDS = {
+  buscar:  { input: 'search-input',          results: 'results-area' },
+  carrito: { input: 'search-input-carrito',  results: 'results-area-carrito' },
+  pedido:  { input: 'search-input-pedido',   results: 'results-area-pedido' }
+};
+var _buscarTimers = {};
+function buscarDebounced(area) {
+  area = area || 'buscar';
+  clearTimeout(_buscarTimers[area]);
+  _buscarTimers[area] = setTimeout(function(){ buscar(area); }, 200);
 }
 function quitarTildes(s) {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
-function buscar() {
-  var q = quitarTildes(document.getElementById('search-input').value.trim().toLowerCase());
-  var area = document.getElementById('results-area');
-  if (!q) { area.innerHTML = ''; return; }
+function limpiarBusqueda(area) {
+  area = area || 'buscar';
+  var ids = AREA_IDS[area];
+  var inputEl = document.getElementById(ids.input);
+  var area_el = document.getElementById(ids.results);
+  if (inputEl) inputEl.value = '';
+  if (area_el) area_el.innerHTML = '';
+  if (inputEl) inputEl.focus();
+}
+function buscar(area) {
+  area = area || 'buscar';
+  var ids = AREA_IDS[area];
+  var inputEl = document.getElementById(ids.input);
+  var area_el = document.getElementById(ids.results);
+  if (!inputEl || !area_el) return;
+  var q = quitarTildes(inputEl.value.trim().toLowerCase());
+  if (!q) { area_el.innerHTML = ''; return; }
   if (q.length < 3) {
-    area.innerHTML = '<div class="no-result"><i class="ti ti-keyboard" style="font-size:28px;display:block;margin-bottom:8px"></i>Escribí al menos 3 letras</div>';
+    area_el.innerHTML = '<div class="no-result"><i class="ti ti-keyboard" style="font-size:28px;display:block;margin-bottom:8px"></i>Escribí al menos 3 letras</div>';
     return;
   }
   var found = P.filter(function(p){
     return quitarTildes(p.cod.toLowerCase()).includes(q) || quitarTildes(p.nombre.toLowerCase()).includes(q);
   });
   if (!found.length) {
-    area.innerHTML = '<div class="no-result"><i class="ti ti-search-off" style="font-size:28px;display:block;margin-bottom:8px"></i>Sin resultados</div>';
+    area_el.innerHTML = '<div class="no-result"><i class="ti ti-search-off" style="font-size:28px;display:block;margin-bottom:8px"></i>Sin resultados</div>';
     return;
   }
-  area.innerHTML = '<div class="results-count">' + found.length + ' producto' + (found.length !== 1 ? 's' : '') + ' encontrado' + (found.length !== 1 ? 's' : '') + '</div>' +
+  area_el.innerHTML = '<div class="results-count">' + found.length + ' producto' + (found.length !== 1 ? 's' : '') + ' encontrado' + (found.length !== 1 ? 's' : '') + '</div>' +
     found.map(function(p){
       var idx = P.indexOf(p);
+      var qtyId = 'qi_' + area + '_' + idx;
+      var faltaId = 'falta_' + area + '_' + idx;
       return '<div class="result-row">' +
         '<div class="result-info">' +
           '<div class="result-nombre">' + cap(p.nombre) + '</div>' +
@@ -932,12 +982,12 @@ function buscar() {
         '<span class="result-unit">' + (UNIDAD_LABEL[p.u || 'u'] || p.u || 'u') + '</span>' +
         '<div class="result-precio">' + fmtNum(p.precio) + '</div>' +
         '<div class="qty-control">' +
-          '<button class="qty-btn" onclick="adjQty(\'qi_' + idx + '\',-1)">−</button>' +
-          '<input class="qty-input" type="number" id="qi_' + idx + '" value="1" min="1" step="1"/>' +
-          '<button class="qty-btn" onclick="adjQty(\'qi_' + idx + '\',1)">+</button>' +
+          '<button class="qty-btn" onclick="adjQty(\'' + qtyId + '\',-1)">−</button>' +
+          '<input class="qty-input" type="number" id="' + qtyId + '" value="1" min="1" step="1"/>' +
+          '<button class="qty-btn" onclick="adjQty(\'' + qtyId + '\',1)">+</button>' +
         '</div>' +
-        '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#888;cursor:pointer;white-space:nowrap"><input type="checkbox" id="falta_' + idx + '" onchange="toggleFaltante(' + idx + ',this.checked)" ' + (faltantes[p.cod] ? 'checked' : '') + ' style="width:14px;height:14px;accent-color:#e24b4a"/> Falta</label>' +
-        '<button class="btn-add-cart" onclick="addCart(' + idx + ')"><i class="ti ti-shopping-cart"></i> Agregar</button>' +
+        '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#888;cursor:pointer;white-space:nowrap"><input type="checkbox" id="' + faltaId + '" onchange="toggleFaltante(' + idx + ',this.checked)" ' + (faltantes[p.cod] ? 'checked' : '') + ' style="width:14px;height:14px;accent-color:#e24b4a"/> Falta</label>' +
+        '<button class="btn-add-cart" onclick="addCart(\'' + area + '\',' + idx + ')"><i class="ti ti-shopping-cart"></i> Agregar</button>' +
       '</div>';
     }).join('');
 }
@@ -949,13 +999,17 @@ function adjQty(id, delta) {
 
 
 // ---------- Carrito ----------
-function addCart(idx) {
+function addCart(area, idx) {
+  // Compatibilidad: si se llama con un solo argumento numérico, es la firma vieja addCart(idx)
+  if (idx === undefined) { idx = area; area = 'buscar'; }
   var p = P[idx];
-  var qty = parseInt((document.getElementById('qi_' + idx) || {value:1}).value) || 1;
+  var qty = parseInt((document.getElementById('qi_' + area + '_' + idx) || {value:1}).value) || 1;
   var ex = carrito.find(function(c){ return c.cod === p.cod; });
   if (ex) { ex.qty += qty; }
   else { carrito.push({cod:p.cod, nombre:p.nombre, precio:p.precio, u:p.u||'u', qty:qty}); }
   actualizarBadge();
+  renderCarrito();
+  renderPedResumen();
   toast('Agregado: ' + cap(p.nombre) + ' ×' + qty);
 }
 
@@ -1054,7 +1108,7 @@ function descargarPNG() {
 
   var rows = carrito.map(function(c){
     return '<tr>' +
-      '<td class="num">' + c.qty + '</td>' +
+      '<td class="num">' + fmtCantTicket(c.qty, c.u) + '</td>' +
       '<td>' + cap(c.nombre) + '</td>' +
       '<td class="num">' + fmtNum(c.precio) + '</td>' +
       '<td class="num"><strong>' + fmtNum(c.precio * c.qty) + '</strong></td>' +
@@ -1799,7 +1853,7 @@ function confirmarPedido() {
 // ---- Ticket PNG del pedido ----
 function generarTicketPedido(ped) {
   var rows = ped.items.map(function(c){
-    return '<tr><td class="num">'+c.qty+'</td><td>'+cap(c.nombre)+'</td><td class="num">'+fmtNum(c.precio)+'</td><td class="num"><strong>'+fmtNum(c.precio*c.qty)+'</strong></td></tr>';
+    return '<tr><td class="num">'+fmtCantTicket(c.qty, c.u)+'</td><td>'+cap(c.nombre)+'</td><td class="num">'+fmtNum(c.precio)+'</td><td class="num"><strong>'+fmtNum(c.precio*c.qty)+'</strong></td></tr>';
   }).join('');
   var descRow = ped.descuento ? '<tr><td colspan="3" class="num">Descuento '+ped.descuento+'%</td><td class="num">-'+fmtNum(ped.subtotal*(ped.descuento/100))+'</td></tr>' : '';
   var subtotalRow = ped.descuento ? '<tr style="background:#eef3ed"><td colspan="3" class="num"><strong>Subtotal</strong></td><td class="num"><strong>'+fmtNum(ped.subtotal)+'</strong></td></tr>' : '';
