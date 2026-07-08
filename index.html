@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
@@ -139,7 +139,7 @@ body{background:#f5f5f5}
 .ticket-table .num{text-align:right}
 .ticket-total-row{background:#eef3ed;font-weight:700;font-size:15px}
 .ticket-total-row td{padding:10px 10px;color:#2c5f2e}
-.ticket-legend{font-size:11px;color:#888;font-style:italic;margin-top:10px;text-align:right}
+.ticket-legend{font-size:11px;color:#888;font-style:italic;margin-top:10px;text-align:left}
 .ticket-footer{border-top:1px solid #ccc;padding-top:10px;font-size:11px;color:#888;font-style:italic;margin-top:4px}
 
 /* ---- Prestados ---- */
@@ -1028,7 +1028,7 @@ function renderCarrito() {
 
 +'</div></div>'
   +'<div class="total-bar"><div><div class="total-label">Subtotal: '+fmtNum(subtotal)+'</div>'+(descuentoCarrito?'<div style="font-size:12px;color:#2c5f2e">Descuento '+descuentoCarrito+'%: -'+fmtNum(descuento)+'</div>':'')+'</div><div class="total-valor">'+fmtNum(total)+'</div></div>'
-  +'<div class="cart-actions"><button class="btn-vaciar" onclick="vaciarCarrito()"><i class="ti ti-trash"></i> Vaciar carrito</button><button class="btn-png" onclick="descargarPNG()"><i class="ti ti-photo-down"></i> Descargar imagen</button></div>'
+  +'<div class="cart-actions"><button class="btn-vaciar" onclick="vaciarCarrito()"><i class="ti ti-trash"></i> Vaciar carrito</button><button class="btn-png" onclick="descargarPNG()"><i class="ti ti-photo-down"></i> Descargar presupuesto</button></div>'
   +'<button class="btn-confirmar-pedido" style="margin-top:10px" onclick="convertirEnPedido()"><i class="ti ti-moped"></i> Convertir carrito en pedido</button>';
 }
 
@@ -1075,7 +1075,7 @@ var resumenDescuento =
 
   var html =
     '<div class="ticket-header">' +
-      '<div class="ticket-logo" style="display:flex;align-items:center;gap:10px"><img src="data:image/png;base64,' + LOGO_B64 + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover"/>El Portugués</div>' +
+      '<div class="ticket-logo" style="display:flex;align-items:center;gap:10px"><img src="data:image/png;base64,' + LOGO_B64 + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover"/>El Portugués - Presupuesto</div>' +
       '<div class="ticket-sub">Corralón de materiales para la construcción, ferretería y bazar<br>' +
         'J Bustamante y Guevara 1095, Hurlingham &nbsp;·&nbsp; WhatsApp: 11 2212-5551 &nbsp;·&nbsp; Teléfono: 4662-0552' +
       '<div class="ticket-date">' + fecha + '</div>' +
