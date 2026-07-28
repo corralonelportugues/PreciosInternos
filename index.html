@@ -540,6 +540,8 @@ body{background:#f5f5f5}
           <div class="turno-opts">
             <div class="turno-opt active" id="turno-mañana" onclick="setTurno('mañana')">Mañana</div>
             <div class="turno-opt" id="turno-tarde" onclick="setTurno('tarde')">Tarde</div>
+            <div class="turno-opt" id="turno-en-el-dia" onclick="setTurno('en-el-dia')">En el día</div>
+            <div class="turno-opt" id="turno-vacio" onclick="setTurno('')">Sin especificar</div>
           </div>
         </div>
         <div id="ent-avisa-box" style="display:none;margin-top:8px">
@@ -573,6 +575,7 @@ body{background:#f5f5f5}
     <div class="pago-opts">
       <div class="pago-opt pendiente" id="pago-domicilio" onclick="setPago('domicilio')"><i class="ti ti-home"></i> Paga en domicilio</div>
       <div class="pago-opt pendiente" id="pago-fiado" onclick="setPago('fiado')"><i class="ti ti-credit-card-off"></i> Fiado</div>
+      <div class="pago-opt pendiente" id="pago-debe" onclick="setPago('debe')"><i class="ti ti-alert-circle"></i> Queda debiendo</div>
       <div class="pago-opt" id="pago-efectivo" onclick="setPago('efectivo')"><i class="ti ti-cash"></i> Efectivo</div>
       <div class="pago-opt" id="pago-transferencia" onclick="setPago('transferencia')"><i class="ti ti-transfer"></i> Transferencia</div>
       <div class="pago-opt" id="pago-credito" onclick="setPago('credito')"><i class="ti ti-credit-card"></i> Tarjeta crédito</div>
@@ -603,6 +606,17 @@ body{background:#f5f5f5}
       <div style="display:flex;gap:6px">
         <button class="btn-save" onclick="guardarPedidosEnSheets()" style="font-size:12px;padding:4px 10px"><i class="ti ti-cloud-upload"></i> Guardar en Sheets</button>
       </div>
+    </div>
+    <div class="search-row" style="margin-bottom:10px">
+      <input type="text" id="hist-busqueda" placeholder="Buscar por cliente, dirección, teléfono o producto" oninput="setHistBusqueda(this.value)" autocomplete="off"/>
+      <button type="button" class="btn-clear-search" onclick="document.getElementById('hist-busqueda').value='';setHistBusqueda('')" title="Borrar búsqueda"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="bulk-row" style="margin-bottom:10px;margin-top:0">
+      <label>Desde</label>
+      <input type="date" id="hist-fecha-desde" onchange="setHistRangoFecha()"/>
+      <label>Hasta</label>
+      <input type="date" id="hist-fecha-hasta" onchange="setHistRangoFecha()"/>
+      <button type="button" class="btn-vaciar" onclick="limpiarHistRangoFecha()">Limpiar fechas</button>
     </div>
     <div class="hist-filtros">
       <div class="hist-filtro-btn active" onclick="setHistFiltro('todos',this)">Todos</div>
@@ -1717,15 +1731,16 @@ function setEntregaTipo(tipo) {
 
 function setTurno(t) {
   pedTurno = t;
-  ['mañana','tarde'].forEach(function(x){
-    document.getElementById('turno-' + x).classList.toggle('active', x === t);
+  var ids = { 'mañana':'turno-mañana', 'tarde':'turno-tarde', 'en-el-dia':'turno-en-el-dia', '':'turno-vacio' };
+  Object.keys(ids).forEach(function(x){
+    document.getElementById(ids[x]).classList.toggle('active', x === t);
   });
 }
 
 // ---- Método de pago ----
 function setPago(p) {
   pedPago = p;
-  ['domicilio','fiado','efectivo','transferencia','credito','debito'].forEach(function(x){
+  ['domicilio','fiado','debe','efectivo','transferencia','credito','debito'].forEach(function(x){
     document.getElementById('pago-' + x).classList.toggle('active', x === p);
   });
 }
@@ -1794,14 +1809,17 @@ function confirmarPedido() {
       var d = new Date(fechaEnt + 'T12:00:00');
       var dias = ['DOMINGO','LUNES','MARTES','MIÉRCOLES','JUEVES','VIERNES','SÁBADO'];
       var meses = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
-      entregaText = dias[d.getDay()] + ' ' + d.getDate() + '/' + meses[d.getMonth()] + ' POR LA ' + pedTurno.toUpperCase();
+      var turnoText = '';
+      if (pedTurno === 'en-el-dia') turnoText = ' EN EL DÍA';
+      else if (pedTurno === 'mañana' || pedTurno === 'tarde') turnoText = ' POR LA ' + pedTurno.toUpperCase();
+      entregaText = dias[d.getDay()] + ' ' + d.getDate() + '/' + meses[d.getMonth()] + turnoText;
     } else {
       entregaText = 'Sin fecha';
     }
   }
 
-  var pagoLabels = { domicilio:'Paga en domicilio', fiado:'Fiado', efectivo:'Efectivo', transferencia:'Transferencia', credito:'Tarjeta crédito', debito:'Tarjeta débito' };
-  var esPendiente = pedPago === 'domicilio' || pedPago === 'fiado';
+  var pagoLabels = { domicilio:'Paga en domicilio', fiado:'Fiado', debe:'Queda debiendo', efectivo:'Efectivo', transferencia:'Transferencia', credito:'Tarjeta crédito', debito:'Tarjeta débito' };
+  var esPendiente = pedPago === 'domicilio' || pedPago === 'fiado' || pedPago === 'debe';
 
   var ped = {
     id: Date.now(),
@@ -1838,10 +1856,11 @@ function confirmarPedido() {
   document.getElementById('ped-aclaraciones').value = '';
   document.getElementById('ped-pago-aclaracion').value = '';
   poblarSelectsFecha();
+  setTurno('mañana');
   carrito = [];
   descuentoCarrito = 0;
   pedPago = '';
-  ['domicilio','fiado','efectivo','transferencia','credito','debito'].forEach(function(x){
+  ['domicilio','fiado','debe','efectivo','transferencia','credito','debito'].forEach(function(x){
     document.getElementById('pago-' + x).classList.remove('active');
   });
   actualizarBadge();
@@ -1948,12 +1967,42 @@ function renderProximos() {
 
 // ---- Historial completo ----
 var _histFiltroActual = 'todos';
+var _histBusqueda = '';
+var _histDesde = '';
+var _histHasta = '';
+
+function _norm(s) {
+  return (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
 
 function setHistFiltro(f, el) {
   _histFiltroActual = f;
   document.querySelectorAll('.hist-filtro-btn').forEach(function(b){ b.classList.remove('active'); });
   if (el) el.classList.add('active');
   renderHistorial();
+}
+
+function setHistBusqueda(v) {
+  _histBusqueda = v;
+  renderHistorial();
+}
+
+function setHistRangoFecha() {
+  _histDesde = document.getElementById('hist-fecha-desde').value;
+  _histHasta = document.getElementById('hist-fecha-hasta').value;
+  renderHistorial();
+}
+
+function limpiarHistRangoFecha() {
+  document.getElementById('hist-fecha-desde').value = '';
+  document.getElementById('hist-fecha-hasta').value = '';
+  _histDesde = ''; _histHasta = '';
+  renderHistorial();
+}
+
+function toggleHistDetalle(id) {
+  var el = document.getElementById('hist-detalle-' + id);
+  if (el) el.style.display = (el.style.display === 'none' ? 'block' : 'none');
 }
 
 function renderHistorial() {
@@ -1970,6 +2019,17 @@ function renderHistorial() {
   if (_histFiltroActual === 'pendientes') list = list.filter(function(p){ return !p.cobrado; });
   else if (_histFiltroActual === 'pagados') list = list.filter(function(p){ return p.cobrado; });
   else if (_histFiltroActual === 'avisa') list = list.filter(function(p){ return p.entregaTipo === 'avisa'; });
+
+  if (_histBusqueda.trim()) {
+    var q = _norm(_histBusqueda);
+    list = list.filter(function(p){
+      var enCliente = _norm(p.nombre).indexOf(q) > -1 || _norm(p.dir).indexOf(q) > -1 || _norm(p.tel).indexOf(q) > -1;
+      var enItems = (p.items || []).some(function(it){ return _norm(it.nombre).indexOf(q) > -1 || _norm(it.cod).indexOf(q) > -1; });
+      return enCliente || enItems;
+    });
+  }
+  if (_histDesde) list = list.filter(function(p){ return (p.fecha || '') >= _histDesde; });
+  if (_histHasta) list = list.filter(function(p){ return (p.fecha || '') <= _histHasta; });
 
   // Ordenar: urgentes primero, avisa al final
   list.sort(function(a, b){
@@ -2004,7 +2064,12 @@ function renderHistorial() {
           (!p.cobrado ? '<span class="badge-pendiente-cobro">Pendiente cobro</span>' : '<span style="color:#2c5f2e;font-weight:600"><i class="ti ti-check"></i> Cobrado</span>') +
         '</div>' +
         (p.aclaraciones ? '<div style="font-size:12px;color:#888;margin-top:3px;font-style:italic"><i class="ti ti-info-circle"></i> ' + p.aclaraciones + '</div>' : '') +
-        '<div style="font-size:11px;color:#bbb;margin-top:4px">Pedido: ' + (p.fecha || '—') + ' · Items: ' + (p.items ? p.items.length : 0) + '</div>' +
+        '<div style="font-size:11px;color:#bbb;margin-top:4px;cursor:pointer" onclick="toggleHistDetalle(\''+p.id+'\')"><i class="ti ti-list" style="margin-right:3px"></i>Pedido: ' + (p.fecha || '—') + ' · Items: ' + (p.items ? p.items.length : 0) + ' <span style="color:var(--brand);text-decoration:underline">(ver detalle)</span></div>' +
+        '<div id="hist-detalle-' + p.id + '" style="display:none;margin-top:6px;padding:8px 10px;background:#f8f8f8;border-radius:6px">' +
+          (p.items || []).map(function(it){
+            return '<div style="display:flex;justify-content:space-between;font-size:12px;color:#555;padding:2px 0"><span>' + cap(it.nombre) + ' x' + it.qty + '</span><span>' + fmtNum(it.precio * it.qty) + '</span></div>';
+          }).join('') +
+        '</div>' +
       '</div>' +
       '<div class="proximo-actions">' +
         (!p.cobrado ? '<button class="btn-pagar" onclick="marcarCobrado(\''+p.id+'\')"><i class="ti ti-check"></i> Cobrar</button>' : '') +
