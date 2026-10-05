@@ -450,17 +450,6 @@ body{background:#f5f5f5}
     </div>
     <div id="msg-aumento"></div>
   </div>
-  <div class="card">
-    <div class="card-title"><i class="ti ti-replace"></i> Precio fijo por categoría</div>
-    <div class="bulk-row">
-      <label>Categoría:</label>
-      <select id="fixed-cat"></select>
-      <label>Precio:</label>
-      <input type="number" id="fixed-precio" placeholder="importe" min="0"/>
-      <button class="btn-green" onclick="aplicarFijo()">Aplicar precio</button>
-    </div>
-    <div id="msg-fijo"></div>
-  </div>
   <div class="save-row">
     <span class="save-hint">Los cambios de precio también deben guardarse en Sheets</span>
     <button class="btn-save" onclick="guardarEnSheets()">
@@ -804,7 +793,6 @@ function autoAsignarCategorias() {
 
 function refreshCatSelects() {
   buildCatOptions('bulk-cat');
-  buildCatOptions('fixed-cat');
   buildNewCatSelect();
 }
 
@@ -1313,20 +1301,6 @@ function aplicarAumento() {
   var mult = 1 + pct / 100;
   afectados.forEach(function(p){ p.precio = Math.round(p.precio * mult * 100) / 100; });
   document.getElementById('msg-aumento').innerHTML = '<div class="msg-ok"><i class="ti ti-check"></i> +' + pct + '% aplicado a ' + afectados.length + ' productos de ' + c + '.</div>';
-  marcarCambios();
-}
-
-function aplicarFijo() {
-  var c = document.getElementById('fixed-cat').value;
-  var pr = parseFloat(document.getElementById('fixed-precio').value);
-  if (!c) { alert('Elegí una categoría'); return; }
-  if (isNaN(pr) || pr < 0) { alert('Precio inválido'); return; }
-  var afectados = P.filter(function(p){ return cat(p) === c; });
-  if (!afectados.length) { alert('No hay productos en esa categoría'); return; }
-  var ej = afectados.slice(0,5).map(function(p){ return '• ' + cap(p.nombre); }).join('\n');
-  if (!confirm('Vas a poner precio ' + fmtNum(pr) + ' a ' + afectados.length + ' productos de "' + c + '".\n\nEjemplos:\n' + ej + (afectados.length > 5 ? '\n…' : '') + '\n\n¿Continuar?')) return;
-  afectados.forEach(function(p){ p.precio = pr; });
-  document.getElementById('msg-fijo').innerHTML = '<div class="msg-ok"><i class="ti ti-check"></i> Precio fijado a ' + afectados.length + ' productos de ' + c + '.</div>';
   marcarCambios();
 }
 
