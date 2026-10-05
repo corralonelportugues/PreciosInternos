@@ -410,8 +410,10 @@ body{background:#f5f5f5}
         <option value="bolsa">Bolsa</option>
         <option value="lts">Litros</option>
       </select>
+      <select id="new-cat"><option value="">Sin categoría</option></select>
       <button class="btn-green" onclick="agregar()"><i class="ti ti-plus"></i> Agregar</button>
     </div>
+    <div style="margin-bottom:8px"><button class="btn-vaciar" onclick="autoAsignarCategorias()"><i class="ti ti-wand"></i> Sugerir categorías a los productos sin categoría</button></div>
     <input class="filter-input" type="text" id="edit-filter" placeholder="Filtrar lista..." oninput="renderEditar()"/>
     <div class="tw">
       <table class="edit-table">
@@ -420,6 +422,7 @@ body{background:#f5f5f5}
           <th>Nombre</th>
           <th style="width:100px">Precio</th>
           <th style="width:130px">Unidad</th>
+          <th style="width:150px">Categoría</th>
           <th style="width:50px"></th>
         </tr></thead>
         <tbody id="edit-tbody"></tbody>
@@ -714,41 +717,95 @@ var CAT_KEYWORDS = [
   { id:'membrana',   label:'Membranas / Impermeab.', words:['membrana','impermeab','geomembrana','butilon','butilón'] },
 ];
 
+// La categoría ahora es un dato guardado en cada producto (columna "Categoría" de la hoja).
+// Ya NO se deduce del nombre. Producto sin categoría = '' (queda fuera de los aumentos masivos).
 function cat(p) {
-  var n = p.nombre.toLowerCase();
-  for (var i = 0; i < CAT_KEYWORDS.length; i++) {
-    var ck = CAT_KEYWORDS[i];
-    for (var j = 0; j < ck.words.length; j++) {
-      if (n.includes(ck.words[j])) return ck.id;
-    }
-  }
-  return 'otro';
+  return (p.cat === undefined || p.cat === null) ? '' : String(p.cat).trim();
 }
 
 function catLabel(id) {
-  for (var i = 0; i < CAT_KEYWORDS.length; i++) {
-    if (CAT_KEYWORDS[i].id === id) return CAT_KEYWORDS[i].label;
-  }
-  return cap(id);
+  return id || 'Sin categoría';
 }
 
-// Construye lista de categorías presentes en los datos
+// Lista de categorías disponibles: las sugeridas + las que existan en los datos
+function listaCategorias() {
+  var set = {};
+  CAT_KEYWORDS.forEach(function(ck){ set[ck.label] = true; });
+  P.forEach(function(p){ var c = cat(p); if (c) set[c] = true; });
+  return Object.keys(set).sort(function(a,b){ return a.localeCompare(b, 'es'); });
+}
+
+function escAttr(v) { return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function catSelectHTML(idx, valor) {
+  var opts = '<option value="">Sin categoría</option>' + listaCategorias().map(function(c){
+    return '<option value="' + escAttr(c) + '"' + (c === valor ? ' selected' : '') + '>' + c + '</option>';
+  }).join('');
+  return '<select onchange="P[' + idx + '].cat=this.value;marcarCambios();refreshCatSelects()">' + opts + '</select>';
+}
+
+// Selectores de aumento masivo: SOLO categorías que tienen productos. Sin "Todos" y sin "Sin categoría".
 function buildCatOptions(selId) {
   var sel = document.getElementById(selId);
   if (!sel) return;
   var present = {};
-  P.forEach(function(p){ present[cat(p)] = true; });
-  var html = '<option value="todos">Todos</option>';
-  CAT_KEYWORDS.forEach(function(ck){
-    if (present[ck.id]) html += '<option value="' + ck.id + '">' + ck.label + '</option>';
-  });
-  if (present['otro']) html += '<option value="otro">Otros</option>';
+  P.forEach(function(p){ var c = cat(p); if (c) present[c] = (present[c] || 0) + 1; });
+  var cats = Object.keys(present).sort(function(a,b){ return a.localeCompare(b, 'es'); });
+  var prev = sel.value;
+  var html = '<option value="">— Elegí una categoría —</option>' + cats.map(function(c){
+    return '<option value="' + escAttr(c) + '">' + c + ' (' + present[c] + ')</option>';
+  }).join('');
   sel.innerHTML = html;
+  if (prev && present[prev]) sel.value = prev;
+}
+
+function buildNewCatSelect() {
+  var sel = document.getElementById('new-cat');
+  if (!sel) return;
+  var prev = sel.value;
+  sel.innerHTML = '<option value="">Sin categoría</option>' + listaCategorias().map(function(c){
+    return '<option value="' + escAttr(c) + '">' + c + '</option>';
+  }).join('');
+  sel.value = prev;
+}
+
+// Asignación inicial SUGERIDA (una sola vez): solo toca productos SIN categoría.
+// Elige la categoría cuya palabra aparece primero en el nombre (el tipo de producto suele ir primero).
+function autoAsignarCategorias() {
+  var sinCat = P.filter(function(p){ return !cat(p); });
+  if (!sinCat.length) { alert('Todos los productos ya tienen categoría.'); return; }
+  var reglas = [];
+  CAT_KEYWORDS.forEach(function(ck){
+    ck.words.forEach(function(w){
+      var palabra = quitarTildes(w.toLowerCase()).replace(/[^a-z0-9 ñ]/g,'').trim();
+      if (!palabra || palabra === 'cal' && false) return;
+      var esc = palabra.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      var rx = palabra.length >= 7
+        ? new RegExp('(^|[^a-z0-9])' + esc)
+        : new RegExp('(^|[^a-z0-9])' + esc + '(e?s)?($|[^a-z0-9])');
+      reglas.push({ label: ck.label, rx: rx });
+    });
+  });
+  var asignados = 0;
+  sinCat.forEach(function(p){
+    var n = quitarTildes((p.nombre || '').toLowerCase());
+    var mejor = null, pos = 1e9;
+    reglas.forEach(function(r){
+      var m = r.rx.exec(n);
+      if (m && m.index < pos) { pos = m.index; mejor = r.label; }
+    });
+    if (mejor) { p.cat = mejor; asignados++; }
+  });
+  marcarCambios();
+  renderEditar();
+  refreshCatSelects();
+  toast(asignados + ' categorías sugeridas. ' + (sinCat.length - asignados) + ' quedaron sin categoría. Revisá y guardá en Sheets.');
 }
 
 function refreshCatSelects() {
   buildCatOptions('bulk-cat');
   buildCatOptions('fixed-cat');
+  buildNewCatSelect();
 }
 
 // ---------- JSONP helper ----------
@@ -955,6 +1012,10 @@ function buscarDebounced(area) {
 function quitarTildes(s) {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
+// Ignora todos los espacios al buscar: "6 x 3" == "6x3"
+function sinEspacios(s) {
+  return s.replace(/\s+/g, '');
+}
 function limpiarBusqueda(area) {
   area = area || 'buscar';
   var ids = AREA_IDS[area];
@@ -970,14 +1031,14 @@ function buscar(area) {
   var inputEl = document.getElementById(ids.input);
   var area_el = document.getElementById(ids.results);
   if (!inputEl || !area_el) return;
-  var q = quitarTildes(inputEl.value.trim().toLowerCase());
+  var q = sinEspacios(quitarTildes(inputEl.value.trim().toLowerCase()));
   if (!q) { area_el.innerHTML = ''; return; }
   if (q.length < 3) {
     area_el.innerHTML = '<div class="no-result"><i class="ti ti-keyboard" style="font-size:28px;display:block;margin-bottom:8px"></i>Escribí al menos 3 letras</div>';
     return;
   }
   var found = P.filter(function(p){
-    return quitarTildes(p.cod.toLowerCase()).includes(q) || quitarTildes(p.nombre.toLowerCase()).includes(q);
+    return sinEspacios(quitarTildes(p.cod.toLowerCase())).includes(q) || sinEspacios(quitarTildes(p.nombre.toLowerCase())).includes(q);
   });
   if (!found.length) {
     area_el.innerHTML = '<div class="no-result"><i class="ti ti-search-off" style="font-size:28px;display:block;margin-bottom:8px"></i>Sin resultados</div>';
@@ -1208,6 +1269,7 @@ function renderEditar() {
       '<td><input value="' + p.nombre.replace(/"/g,'&quot;') + '" onchange="P[' + idx + '].nombre=this.value;marcarCambios()"/></td>' +
       '<td><input type="number" value="' + p.precio + '" onchange="P[' + idx + '].precio=parseFloat(this.value)||0;marcarCambios()"/></td>' +
       '<td><select onchange="P[' + idx + '].u=this.value;marcarCambios()">' + opts + '</select></td>' +
+      '<td>' + catSelectHTML(idx, cat(p)) + '</td>' +
       '<td><button class="btn-del-cart" onclick="eliminar(' + idx + ')"><i class="ti ti-trash"></i></button></td>' +
     '</tr>';
   }).join('');
@@ -1228,7 +1290,7 @@ function agregar() {
   var pr = parseFloat(document.getElementById('new-precio').value);
   var u = document.getElementById('new-unidad').value;
   if (!cod || !nom || isNaN(pr)) { alert('Completá todos los campos'); return; }
-  P.push({cod:cod, nombre:nom, precio:pr, u:u});
+  P.push({cod:cod, nombre:nom, precio:pr, u:u, cat:document.getElementById('new-cat').value});
   document.getElementById('new-cod').value = '';
   document.getElementById('new-nombre').value = '';
   document.getElementById('new-precio').value = '';
@@ -1242,20 +1304,29 @@ function agregar() {
 function aplicarAumento() {
   var c = document.getElementById('bulk-cat').value;
   var pct = parseFloat(document.getElementById('bulk-pct').value);
+  if (!c) { alert('Elegí una categoría'); return; }
   if (isNaN(pct) || pct <= 0) { alert('Porcentaje inválido'); return; }
-  var mult = 1 + pct / 100; var count = 0;
-  P.forEach(function(p){ if (c === 'todos' || cat(p) === c) { p.precio = Math.round(p.precio * mult * 100) / 100; count++; } });
-  document.getElementById('msg-aumento').innerHTML = '<div class="msg-ok"><i class="ti ti-check"></i> +' + pct + '% aplicado a ' + count + ' productos.</div>';
+  var afectados = P.filter(function(p){ return cat(p) === c; });
+  if (!afectados.length) { alert('No hay productos en esa categoría'); return; }
+  var ej = afectados.slice(0,5).map(function(p){ return '• ' + cap(p.nombre); }).join('\n');
+  if (!confirm('Vas a aumentar ' + pct + '% los precios de ' + afectados.length + ' productos de "' + c + '".\n\nEjemplos:\n' + ej + (afectados.length > 5 ? '\n…' : '') + '\n\n¿Continuar?')) return;
+  var mult = 1 + pct / 100;
+  afectados.forEach(function(p){ p.precio = Math.round(p.precio * mult * 100) / 100; });
+  document.getElementById('msg-aumento').innerHTML = '<div class="msg-ok"><i class="ti ti-check"></i> +' + pct + '% aplicado a ' + afectados.length + ' productos de ' + c + '.</div>';
   marcarCambios();
 }
 
 function aplicarFijo() {
   var c = document.getElementById('fixed-cat').value;
   var pr = parseFloat(document.getElementById('fixed-precio').value);
+  if (!c) { alert('Elegí una categoría'); return; }
   if (isNaN(pr) || pr < 0) { alert('Precio inválido'); return; }
-  var count = 0;
-  P.forEach(function(p){ if (c === 'todos' || cat(p) === c) { p.precio = pr; count++; } });
-  document.getElementById('msg-fijo').innerHTML = '<div class="msg-ok"><i class="ti ti-check"></i> Precio fijado a ' + count + ' productos.</div>';
+  var afectados = P.filter(function(p){ return cat(p) === c; });
+  if (!afectados.length) { alert('No hay productos en esa categoría'); return; }
+  var ej = afectados.slice(0,5).map(function(p){ return '• ' + cap(p.nombre); }).join('\n');
+  if (!confirm('Vas a poner precio ' + fmtNum(pr) + ' a ' + afectados.length + ' productos de "' + c + '".\n\nEjemplos:\n' + ej + (afectados.length > 5 ? '\n…' : '') + '\n\n¿Continuar?')) return;
+  afectados.forEach(function(p){ p.precio = pr; });
+  document.getElementById('msg-fijo').innerHTML = '<div class="msg-ok"><i class="ti ti-check"></i> Precio fijado a ' + afectados.length + ' productos de ' + c + '.</div>';
   marcarCambios();
 }
 
