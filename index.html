@@ -2376,8 +2376,15 @@ poblarSelectsFecha();
 cargarDesdeSheets();
   // ============ ALERTAS DE PAGOS (Mercado Pago) ============
 var PAGOS_INTERVALO_MS = 20000;
-var PAGOS_VENTANAS = [[8 * 60, 12 * 60 + 30], [14 * 60, 18 * 60 + 30]];
-var PAGOS_DIAS = [0, 1, 2, 3, 4, 5, 6]; // 0=domingo ... 6=sabado
+// Horarios por dia (0=domingo ... 6=sabado). Dia que no figura = no consulta.
+var PAGOS_HORARIOS = {
+  1: [[8 * 60, 12 * 60 + 30], [14 * 60, 18 * 60 + 30]],
+  2: [[8 * 60, 12 * 60 + 30], [14 * 60, 18 * 60 + 30]],
+  3: [[8 * 60, 12 * 60 + 30], [14 * 60, 18 * 60 + 30]],
+  4: [[8 * 60, 12 * 60 + 30], [14 * 60, 18 * 60 + 30]],
+  5: [[8 * 60, 12 * 60 + 30], [14 * 60, 18 * 60 + 30]],
+  6: [[8 * 60, 13 * 60 + 30]]
+};
 var pagosSeq = null;       // ultimo pago que esta pantalla ya vio
 var pagosEnVuelo = false;  // evita consultas superpuestas
 
@@ -2394,8 +2401,9 @@ function ahoraAR() {
 
 function enHorarioPagos() {
   var a = ahoraAR();
-  if (PAGOS_DIAS.indexOf(a.dia) === -1) return false;
-  return PAGOS_VENTANAS.some(function (v) { return a.min >= v[0] && a.min < v[1]; });
+  var ventanas = PAGOS_HORARIOS[a.dia];
+  if (!ventanas) return false;
+  return ventanas.some(function (v) { return a.min >= v[0] && a.min < v[1]; });
 }
 
 function leerSeq() {
