@@ -652,7 +652,7 @@ body{background:#f5f5f5}
 // ============================================================
 // CONFIGURACIÓN — pegá tu URL de Apps Script acá abajo
 // ============================================================
-var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzYwWaS8kDFGFvhXzu0JtUxCb8QBePIfsT27ehcbsxJJFsi9T_ZXGq5VU2H582sicS9/exec';
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxkvFLo62UbgBst5Xw5hgfQ_euHU9HFj3oqb-I_ItkZ1VTTjnycU0kZYhS9dgb0IU9_/exec';
 // ============================================================
 
 // --- Unidades ---
@@ -2376,7 +2376,7 @@ poblarSelectsFecha();
 cargarDesdeSheets();
   // ============ ALERTAS DE PAGOS (Mercado Pago) ============
 var PAGOS_INTERVALO_MS = 5000;
-var PAGOS_VENTANAS = [[8 * 60, 12 * 60 + 30], [14 * 60, 18 * 60 + 30]]; // minutos desde 00:00, hora AR
+var PAGOS_VENTANAS = [[0, 24 * 60]];
 var PAGOS_DIAS = [0, 1, 2, 3, 4, 5, 6]; // 0=domingo ... 6=sabado
 var pagosSeq = null;       // ultimo pago que esta pantalla ya vio
 var pagosEnVuelo = false;  // evita consultas superpuestas
